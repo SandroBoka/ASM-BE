@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres:16
+    container_name: asm_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: asm_user
+      POSTGRES_PASSWORD: asm_password
+      POSTGRES_DB: asm_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - asm_postgres_data:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer:latest
+    container_name: asm_adminer
+    restart: always
+    ports:
+      - "8081:8080"
+    depends_on:
+      - db
+
+volumes:
+  asm_postgres_data:
