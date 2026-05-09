@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.api.routes.health_routes import router as health_router
 from app.api.routes.db_routes import router as db_router
+from app.api.routes.service_routes import router as service_router
 
 app = FastAPI(
     title="ASM Backend",
@@ -9,3 +10,4 @@ app = FastAPI(
 
 app.include_router(health_router)
 app.include_router(db_router)
+app.include_router(service_router)

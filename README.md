@@ -47,9 +47,11 @@ Create a `.env` file in the project root with:
 
 ```env
 DATABASE_URL=postgresql://asm_user:asm_password@localhost:5432/asm_db
+TEST_DATABASE_URL=postgresql://asm_user:asm_password@localhost:5432/asm_test_db
 ```
 
 If you change the PostgreSQL host port in [docker-compose.yml](/Users/sandro/Documents/FER/8_semestar/INFSUS/ASM-BE/docker-compose.yml:1), update the port in `DATABASE_URL` to match.
+`TEST_DATABASE_URL` is used by the integration test suite.
 
 ## Running the Database Stack
 
@@ -114,7 +116,26 @@ Then update `.env` accordingly:
 
 ```env
 DATABASE_URL=postgresql://asm_user:asm_password@localhost:5433/asm_db
+TEST_DATABASE_URL=postgresql://asm_user:asm_password@localhost:5433/asm_test_db
 ```
+
+## Database Migrations
+
+The project uses Alembic for schema migrations.
+
+Apply the latest migrations after starting PostgreSQL:
+
+```bash
+alembic upgrade head
+```
+
+The current migration creates the `usluga` table used by the service catalog:
+
+- `IdUsluge`: primary key
+- `NazivUsluge`: required service name, up to 100 characters
+- `Opis`: optional service description
+- `Trajanje`: required service duration in minutes
+- `Cijena`: required service price with two decimal places
 
 ## Running the Application
 
@@ -135,110 +156,75 @@ FastAPI generates interactive documentation automatically:
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - ReDoc: `http://127.0.0.1:8000/redoc`
 
-## Available Endpoints
-
-### `GET /health`
-
-Returns a simple service health response.
-
-Example request:
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-Example response:
-
-```json
-{
-  "status": "ok",
-  "service": "ASM Backend"
-}
-```
-
-### `GET /db-check`
-
-Checks database connectivity by opening a SQLAlchemy connection and running `SELECT 1`.
-
-Example request:
-
-```bash
-curl http://127.0.0.1:8000/db-check
-```
-
-Example response:
-
-```json
-{
-  "database_connected": true
-}
-```
-
-## Project Structure
-
-```text
-ASM-BE/
-├── docker-compose.yml
-├── app/
-│   ├── api/
-│   │   ├── __init__.py
-│   │   └── routes/
-│   │       ├── __init__.py
-│   │       ├── db_routes.py
-│   │       └── health_routes.py
-│   ├── core/
-│   │   └── config.py
-│   ├── db/
-│   │   ├── __init__.py
-│   │   └── database.py
-│   ├── repositories/
-│   │   └── __init__.py
-│   ├── schemas/
-│   │   └── __init__.py
-│   ├── services/
-│   │   ├── __init__.py
-│   │   └── health_service.py
-│   ├── __init__.py
-│   └── main.py
-├── requirements.txt
-└── README.md
-```
-
 ## Module Overview
 
-### `app/main.py`
+### `app/`
 
-- creates the FastAPI application
-- registers API routers
+- contains the FastAPI application entry point and application modules
 
-### `app/api/routes/health_routes.py`
+### `app/api/routes/`
 
-- defines the `/health` endpoint
+- contains FastAPI route definitions
+- groups HTTP endpoints by feature, such as health checks, database checks, and service catalog operations
 
-### `app/api/routes/db_routes.py`
+### `app/core/`
 
-- defines the `/db-check` endpoint
-- uses the shared SQLAlchemy engine to test database connectivity
+- contains application configuration
+- loads environment-based settings from `.env`
 
-### `app/core/config.py`
+### `app/db/`
 
-- loads application settings from `.env`
-- exposes `DATABASE_URL` through the `settings` object
+- contains database setup
+- exposes the SQLAlchemy engine, session factory, declarative base, and database dependency
 
-### `app/db/database.py`
+### `app/models/`
 
-- creates the SQLAlchemy engine from `DATABASE_URL`
-- exposes `SessionLocal` for future database session usage
+- contains SQLAlchemy ORM models
+- maps Python classes to database tables
 
-### `app/services/health_service.py`
+### `app/repositories/`
 
-- contains the health response logic
+- contains database access logic
+- handles queries, inserts, updates, deletes, and persistence concerns
+
+### `app/schemas/`
+
+- contains Pydantic models
+- defines request and response shapes used by the API
+
+### `app/services/`
+
+- contains business logic
+- validates input and coordinates repository operations
+
+### `alembic/`
+
+- contains Alembic migration configuration and migration scripts
+
+### `tests/`
+
+- contains unit tests for routes, repository behavior, and service-layer validation
+- contains an integration test for the full service CRUD flow
 
 ### `docker-compose.yml`
 
 - defines the local PostgreSQL service
 - defines the Adminer service for database inspection
 - creates the named Docker volume `asm_postgres_data` for persistent database storage
+
+## Running Tests
+
+Run the full test suite with:
+
+```bash
+pytest
+```
+
+Integration tests use `TEST_DATABASE_URL`. Create the test database before running them, for example through Adminer or `psql`:
+
+```sql
+CREATE DATABASE asm_test_db;
+```
 
 ## Common Commands
 
@@ -260,6 +246,12 @@ Run the API:
 uvicorn app.main:app --reload
 ```
 
+Apply database migrations:
+
+```bash
+alembic upgrade head
+```
+
 Check the health endpoint:
 
 ```bash
@@ -270,6 +262,18 @@ Check the database connection:
 
 ```bash
 curl http://127.0.0.1:8000/db-check
+```
+
+List services:
+
+```bash
+curl http://127.0.0.1:8000/services
+```
+
+Run tests:
+
+```bash
+pytest
 ```
 
 Stop the database services:
