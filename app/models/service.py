@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, Numeric, String, Text
+from sqlalchemy.orm import relationship
 
 from app.db.database import Base
 
@@ -15,3 +16,5 @@ class Service(Base):
     Trajanje = Column(Integer, nullable=False)
 
     Cijena = Column(Numeric(10, 2), nullable=False)
+
+    reservation_services = relationship("ReservationService", back_populates="service")
