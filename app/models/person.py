@@ -19,9 +19,19 @@ class Person(Base):
 
     Lozinka = Column(String(255), nullable=False)
 
-    customer_profile = relationship("Customer", back_populates="person", uselist=False)
+    customer_profile = relationship(
+        "Customer",
+        back_populates="person",
+        cascade="all, delete-orphan",
+        uselist=False
+    )
 
-    employee_profile = relationship("Employee", back_populates="person", uselist=False)
+    employee_profile = relationship(
+        "Employee",
+        back_populates="person",
+        cascade="all, delete-orphan",
+        uselist=False
+    )
 
 
 class Customer(Base):

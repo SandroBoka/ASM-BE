@@ -73,8 +73,8 @@ class ServiceCatalogService:
         service = self.get_service_by_id(service_id)
         self.repository.delete(service)
 
+    @staticmethod
     def _validate_service_data(
-            self,
             naziv_usluge: str,
             trajanje: int,
             cijena: Decimal

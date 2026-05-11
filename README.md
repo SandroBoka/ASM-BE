@@ -50,8 +50,8 @@ DATABASE_URL=postgresql://asm_user:asm_password@localhost:5432/asm_db
 TEST_DATABASE_URL=postgresql://asm_user:asm_password@localhost:5432/asm_test_db
 ```
 
-If you change the PostgreSQL host port in [docker-compose.yml](/Users/sandro/Documents/FER/8_semestar/INFSUS/ASM-BE/docker-compose.yml:1), update the port in `DATABASE_URL` to match.
-`TEST_DATABASE_URL` is used by the integration test suite.
+If you change the PostgreSQL host port in `docker-compose.yml`, update the port in `DATABASE_URL` and `TEST_DATABASE_URL` to match.
+`TEST_DATABASE_URL` is used by repository, route, and integration tests that touch the database.
 
 ## Running the Database Stack
 
@@ -129,13 +129,20 @@ Apply the latest migrations after starting PostgreSQL:
 alembic upgrade head
 ```
 
-The current migration creates the `usluga` table used by the service catalog:
+The migrations create the service catalog table and the current core ASM schema:
 
-- `IdUsluge`: primary key
-- `NazivUsluge`: required service name, up to 100 characters
-- `Opis`: optional service description
-- `Trajanje`: required service duration in minutes
-- `Cijena`: required service price with two decimal places
+- `usluga`: service catalog
+- `osoba`: shared person data and credentials
+- `korisnik`: customer profile linked one-to-one to `osoba`
+- `zaposlenik`: employee profile linked one-to-one to `osoba`
+- `vozilo`: customer vehicles
+- `termin`: appointment slots
+- `rezervacija`: service reservations
+- `promjena_termina`: appointment change requests
+- `rezervacija_usluga`: reservation-service join table
+- `obavijest`: customer notifications
+
+Only the service catalog and person/customer/employee API modules are currently exposed through HTTP routes.
 
 ## Running the Application
 
@@ -156,6 +163,56 @@ FastAPI generates interactive documentation automatically:
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - ReDoc: `http://127.0.0.1:8000/redoc`
 
+## Implemented Endpoints
+
+### Health and Database Checks
+
+- `GET /health`
+- database check routes are mounted from `app/api/routes/db_routes.py`
+
+### Services
+
+- `GET /services`
+- `GET /services?search=<text>`
+- `GET /services/{service_id}`
+- `POST /services`
+- `PUT /services/{service_id}`
+- `DELETE /services/{service_id}`
+
+Service request fields:
+
+- `NazivUsluge`: required service name
+- `Opis`: optional service description
+- `Trajanje`: duration in minutes, must be greater than 0
+- `Cijena`: price, cannot be negative
+
+### Persons, Customers, and Employees
+
+- `GET /persons/{person_id}`
+- `PUT /persons/{person_id}`
+- `DELETE /persons/{person_id}`
+- `GET /persons/customers/{customer_id}`
+- `POST /persons/customers`
+- `PUT /persons/customers/{customer_id}`
+- `GET /persons/employees/{employee_id}`
+- `POST /persons/employees`
+- `PUT /persons/employees/{employee_id}`
+- `PATCH /persons/employees/{employee_id}/role`
+
+Person request fields:
+
+- `Ime`: required first name
+- `Prezime`: required last name
+- `Email`: required unique email address
+- `Telefon`: optional phone number
+- `Lozinka`: required password on create and optional on update
+
+Employee request fields additionally support:
+
+- `Uloga`: employee role, defaulting to `serviser` on create
+
+Password values are hashed before they are stored, and response models do not return `Lozinka`.
+
 ## Module Overview
 
 ### `app/`
@@ -165,7 +222,7 @@ FastAPI generates interactive documentation automatically:
 ### `app/api/routes/`
 
 - contains FastAPI route definitions
-- groups HTTP endpoints by feature, such as health checks, database checks, and service catalog operations
+- groups HTTP endpoints by feature, such as health checks, database checks, service catalog operations, and person operations
 
 ### `app/core/`
 
@@ -203,8 +260,8 @@ FastAPI generates interactive documentation automatically:
 
 ### `tests/`
 
-- contains unit tests for routes, repository behavior, and service-layer validation
-- contains an integration test for the full service CRUD flow
+- contains unit tests for route behavior, repository persistence, and service-layer validation
+- contains integration tests for full service and person API flows
 
 ### `docker-compose.yml`
 
@@ -220,11 +277,25 @@ Run the full test suite with:
 pytest
 ```
 
-Integration tests use `TEST_DATABASE_URL`. Create the test database before running them, for example through Adminer or `psql`:
+Run only the person tests with:
+
+```bash
+pytest tests/unit/person tests/integration/test_person_integration.py
+```
+
+Run service and integration tests with:
+
+```bash
+pytest tests/unit/service tests/integration
+```
+
+Database-backed tests use `TEST_DATABASE_URL`. Create the test database before running them, for example through Adminer or `psql`:
 
 ```sql
 CREATE DATABASE asm_test_db;
 ```
+
+The database-backed tests call `drop_all` and `create_all` on the test database. Do not run multiple pytest processes in parallel against the same `asm_test_db`, because concurrent table drops and creates can race each other.
 
 ## Common Commands
 
@@ -256,6 +327,12 @@ Check the health endpoint:
 
 ```bash
 curl http://127.0.0.1:8000/health
+```
+
+Run the person test set:
+
+```bash
+pytest tests/unit/person tests/integration/test_person_integration.py
 ```
 
 Check the database connection:
