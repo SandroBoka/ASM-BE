@@ -142,7 +142,7 @@ The migrations create the service catalog table and the current core ASM schema:
 - `rezervacija_usluga`: reservation-service join table
 - `obavijest`: customer notifications
 
-Only the service catalog and person/customer/employee API modules are currently exposed through HTTP routes.
+The service catalog, person/customer/employee, and vehicle API modules are currently exposed through HTTP routes.
 
 ## Running the Application
 
@@ -188,6 +188,7 @@ Service request fields:
 
 ### Persons, Customers, and Employees
 
+- `GET /persons`
 - `GET /persons/{person_id}`
 - `PUT /persons/{person_id}`
 - `DELETE /persons/{person_id}`
@@ -213,6 +214,25 @@ Employee request fields additionally support:
 
 Password values are hashed before they are stored, and response models do not return `Lozinka`.
 
+### Vehicles
+
+- `GET /vehicles/customers/{customer_id}`
+- `GET /vehicles/{vehicle_id}`
+- `POST /vehicles`
+- `PUT /vehicles/{vehicle_id}`
+- `DELETE /vehicles/{vehicle_id}`
+
+Vehicle request fields:
+
+- `Marka`: required vehicle make
+- `Model`: required vehicle model
+- `Godina`: vehicle year, must be between 1900 and 2100
+- `VrstaMotora`: required engine type
+- `RegOznaka`: required unique registration plate
+- `IdOsobe`: customer ID, required when creating a vehicle
+
+Vehicles belong to customers through `IdOsobe`. Registration plates must be unique.
+
 ## Module Overview
 
 ### `app/`
@@ -222,7 +242,7 @@ Password values are hashed before they are stored, and response models do not re
 ### `app/api/routes/`
 
 - contains FastAPI route definitions
-- groups HTTP endpoints by feature, such as health checks, database checks, service catalog operations, and person operations
+- groups HTTP endpoints by feature, such as health checks, database checks, service catalog operations, person operations, and vehicle operations
 
 ### `app/core/`
 
@@ -261,7 +281,7 @@ Password values are hashed before they are stored, and response models do not re
 ### `tests/`
 
 - contains unit tests for route behavior, repository persistence, and service-layer validation
-- contains integration tests for full service and person API flows
+- contains integration tests for full service, person, and vehicle API flows
 
 ### `docker-compose.yml`
 
@@ -281,6 +301,12 @@ Run only the person tests with:
 
 ```bash
 pytest tests/unit/person tests/integration/test_person_integration.py
+```
+
+Run only the vehicle tests with:
+
+```bash
+pytest tests/unit/vehicle tests/integration/test_vehicle_integration.py
 ```
 
 Run service and integration tests with:
@@ -335,16 +361,16 @@ Run the person test set:
 pytest tests/unit/person tests/integration/test_person_integration.py
 ```
 
+Run the vehicle test set:
+
+```bash
+pytest tests/unit/vehicle tests/integration/test_vehicle_integration.py
+```
+
 Check the database connection:
 
 ```bash
 curl http://127.0.0.1:8000/db-check
-```
-
-List services:
-
-```bash
-curl http://127.0.0.1:8000/services
 ```
 
 Run tests:

@@ -25,12 +25,12 @@ class VehicleRepository:
             .first()
         )
 
-    def get_by_customer_id(self, person_id: int) -> list[Vehicle]:
+    def get_by_customer_id(self, customer_id: int) -> list[Vehicle]:
         return cast(
             list[Vehicle],
             self.db
             .query(Vehicle)
-            .filter(Vehicle.IdOsobe == person_id)  # type: ignore[arg-type]
+            .filter(Vehicle.IdOsobe == customer_id)  # type: ignore[arg-type]
             .order_by(Vehicle.IdVozila)
             .all()
         )
