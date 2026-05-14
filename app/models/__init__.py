@@ -6,3 +6,4 @@ from app.models.reservation import Reservation
 from app.models.reservation_service import ReservationService
 from app.models.service import Service
 from app.models.vehicle import Vehicle
+from app.models.refresh_token import RefreshToken

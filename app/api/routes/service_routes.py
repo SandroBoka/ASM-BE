@@ -5,10 +5,12 @@ from app.db.database import get_db
 from app.repositories.service_repository import ServiceRepository
 from app.schemas.service_schema import ServiceCreate, ServiceResponse, ServiceUpdate
 from app.services.service_catalog_service import ServiceCatalogService
+from app.api.dependencies.auth import get_current_user
 
 router = APIRouter(
     prefix="/services",
-    tags=["Services"]
+    tags=["Services"],
+    dependencies=[Depends(get_current_user)]
 )
 
 

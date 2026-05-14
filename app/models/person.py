@@ -41,7 +41,11 @@ class Customer(Base):
 
     person = relationship("Person", back_populates="customer_profile")
 
-    vehicles = relationship("Vehicle", back_populates="customer")
+    vehicles = relationship(
+        "Vehicle",
+        back_populates="customer",
+        cascade="all, delete-orphan"
+    )
 
     reservations = relationship("Reservation", back_populates="customer")
 

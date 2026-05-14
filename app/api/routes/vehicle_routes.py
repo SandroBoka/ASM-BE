@@ -9,10 +9,12 @@ from app.schemas.vehicle_schema import (
     VehicleUpdate,
 )
 from app.services.vehicle_service import VehicleService
+from app.api.dependencies.auth import get_current_user
 
 router = APIRouter(
     prefix="/vehicles",
-    tags=["Vehicles"]
+    tags=["Vehicles"],
+    dependencies=[Depends(get_current_user)]
 )
 
 

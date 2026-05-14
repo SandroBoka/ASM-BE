@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.repositories.person_repository import PersonRepository
+from app.schemas import AuthUserResponse
 from app.schemas.person_schema import (
     CustomerCreate,
     CustomerResponse,
@@ -16,6 +17,7 @@ from app.schemas.person_schema import (
 )
 from app.services.person_service import PersonService
 from app.models.person import Customer, Employee
+from app.api.dependencies.auth import get_current_user
 
 router = APIRouter(
     prefix="/persons",
@@ -50,14 +52,18 @@ def employee_to_response(employee: Employee) -> dict:
 
 
 @router.get("", response_model=list[PersonResponse])
-def get_all_persons(service: PersonService = Depends(get_person_service)):
+def get_all_persons(
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
+):
     return service.get_all_persons()
 
 
 @router.get("/{person_id}", response_model=PersonResponse)
 def get_person(
         person_id: int,
-        service: PersonService = Depends(get_person_service)
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
 ):
     return service.get_person_by_id(person_id)
 
@@ -65,7 +71,8 @@ def get_person(
 @router.get("/customers/{customer_id}", response_model=CustomerResponse)
 def get_customer(
         customer_id: int,
-        service: PersonService = Depends(get_person_service)
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
 ):
     return customer_to_response(service.get_customer_by_id(customer_id))
 
@@ -73,7 +80,8 @@ def get_customer(
 @router.get("/employees/{employee_id}", response_model=EmployeeResponse)
 def get_employee(
         employee_id: int,
-        service: PersonService = Depends(get_person_service)
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
 ):
     return employee_to_response(service.get_employee_by_id(employee_id))
 
@@ -97,7 +105,8 @@ def create_customer(
 @router.post("/employees", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
 def create_employee(
         request: EmployeeCreate,
-        service: PersonService = Depends(get_person_service)
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
 ):
     employee = service.create_employee(
         ime=request.Ime,
@@ -115,7 +124,8 @@ def create_employee(
 def update_person(
         person_id: int,
         request: PersonUpdate,
-        service: PersonService = Depends(get_person_service)
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
 ):
     return service.update_person(
         person_id=person_id,
@@ -131,7 +141,8 @@ def update_person(
 def update_customer(
         customer_id: int,
         request: CustomerUpdate,
-        service: PersonService = Depends(get_person_service)
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
 ):
     customer = service.update_customer(
         person_id=customer_id,
@@ -149,7 +160,8 @@ def update_customer(
 def update_employee(
         employee_id: int,
         request: EmployeeUpdate,
-        service: PersonService = Depends(get_person_service)
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
 ):
     employee = service.update_employee(
         person_id=employee_id,
@@ -168,7 +180,8 @@ def update_employee(
 def update_employee_role(
         employee_id: int,
         request: EmployeeRoleUpdate,
-        service: PersonService = Depends(get_person_service)
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
 ):
     employee = service.update_employee_role(
         person_id=employee_id,
@@ -181,6 +194,7 @@ def update_employee_role(
 @router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_person(
         person_id: int,
-        service: PersonService = Depends(get_person_service)
+        service: PersonService = Depends(get_person_service),
+        current_user: AuthUserResponse = Depends(get_current_user)
 ):
     service.delete_person(person_id)

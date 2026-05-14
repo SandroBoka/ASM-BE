@@ -42,3 +42,10 @@ from app.schemas.vehicle_schema import (
     VehicleResponse,
     VehicleUpdate,
 )
+from app.schemas.auth_schema import (
+    AuthUserResponse,
+    LoginRequest,
+    AuthTokenResponse,
+    LogoutRequest,
+    RefreshTokenRequest,
+)

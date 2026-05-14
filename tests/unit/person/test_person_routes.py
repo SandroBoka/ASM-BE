@@ -4,9 +4,11 @@ from sqlalchemy.orm import sessionmaker
 import app.models  # noqa: F401
 from fastapi.testclient import TestClient
 
+from app.api.dependencies.auth import get_current_user
 from app.core.config import settings
 from app.db.database import Base, get_db
 from app.main import app
+from app.schemas import AuthUserResponse
 
 engine = create_engine(settings.test_database_url)
 
@@ -26,12 +28,26 @@ def override_get_db():
         db.close()
 
 
+def override_get_current_user():
+    return AuthUserResponse(
+        IdOsobe=1,
+        Ime="Test",
+        Prezime="User",
+        Email="test@example.com",
+        TipKorisnika="employee",
+        Uloga="admin"
+    )
+
+
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[get_current_user] = override_get_current_user
 
 client = TestClient(app)
 
 
 def setup_function():
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
