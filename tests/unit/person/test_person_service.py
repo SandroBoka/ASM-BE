@@ -1,6 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
+from app.core.auth_types import EmployeeRole
 from app.services.person_service import PersonService
 
 
@@ -145,7 +146,7 @@ def test_create_customer_fails_when_email_exists():
     assert error.value.detail == "Email je već u uporabi."
 
 
-def test_update_employee_updates_person_data_and_role():
+def test_update_employee_updates_person_data_without_role():
     repository = FakePersonRepository()
     service = PersonService(repository)
 
@@ -155,7 +156,7 @@ def test_update_employee_updates_person_data_and_role():
         email="marko@example.com",
         telefon=None,
         lozinka="tajna123",
-        uloga="serviser"
+        uloga=EmployeeRole.SERVISER
     )
 
     updated_employee = service.update_employee(
@@ -164,13 +165,12 @@ def test_update_employee_updates_person_data_and_role():
         prezime=None,
         email=None,
         telefon="098-555-666",
-        lozinka=None,
-        uloga="voditelj"
+        lozinka=None
     )
 
     assert updated_employee.person.Ime == "Petar"
     assert updated_employee.person.Telefon == "098-555-666"
-    assert updated_employee.Uloga == "voditelj"
+    assert updated_employee.Uloga == "serviser"
 
 
 def test_update_employee_role_only():
@@ -183,12 +183,12 @@ def test_update_employee_role_only():
         email="luka@example.com",
         telefon=None,
         lozinka="tajna123",
-        uloga="serviser"
+        uloga=EmployeeRole.SERVISER
     )
 
     updated_employee = service.update_employee_role(
         person_id=employee.IdOsobe,
-        uloga="voditelj"
+        uloga=EmployeeRole.VODITELJ
     )
 
     assert updated_employee.Uloga == "voditelj"

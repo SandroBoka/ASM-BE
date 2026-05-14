@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import HTTPException, status
 
+from app.core.auth_types import UserType
 from app.core.config import settings
 from app.models.person import Person
 from app.models.refresh_token import RefreshToken
@@ -96,7 +97,7 @@ class AuthService:
                 Ime=person.Ime,
                 Prezime=person.Prezime,
                 Email=person.Email,
-                TipKorisnika="employee",
+                TipKorisnika=UserType.EMPLOYEE,
                 Uloga=person.employee_profile.Uloga
             )
 
@@ -106,7 +107,7 @@ class AuthService:
                 Ime=person.Ime,
                 Prezime=person.Prezime,
                 Email=person.Email,
-                TipKorisnika="customer",
+                TipKorisnika=UserType.CUSTOMER,
                 Uloga=None
             )
 

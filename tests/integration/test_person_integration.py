@@ -187,8 +187,7 @@ def test_full_employee_flow():
         f"/persons/employees/{employee_id}",
         json={
             "Prezime": "Kovac",
-            "Telefon": "098-555-666",
-            "Uloga": "voditelj"
+            "Telefon": "098-555-666"
         }
     )
 
@@ -199,11 +198,11 @@ def test_full_employee_flow():
     assert updated_employee["IdOsobe"] == employee_id
     assert updated_employee["Prezime"] == "Kovac"
     assert updated_employee["Telefon"] == "098-555-666"
-    assert updated_employee["Uloga"] == "voditelj"
+    assert updated_employee["Uloga"] == "serviser"
 
     role_response = client.patch(
         f"/persons/employees/{employee_id}/role",
-        json={"Uloga": "administrator"}
+        json={"Uloga": "voditelj"}
     )
 
     assert role_response.status_code == 200
@@ -211,7 +210,7 @@ def test_full_employee_flow():
     employee_with_new_role = role_response.json()
 
     assert employee_with_new_role["IdOsobe"] == employee_id
-    assert employee_with_new_role["Uloga"] == "administrator"
+    assert employee_with_new_role["Uloga"] == "voditelj"
 
     delete_response = client.delete(f"/persons/{employee_id}")
 

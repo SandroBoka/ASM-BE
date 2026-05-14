@@ -2,6 +2,7 @@ import bcrypt
 
 from fastapi import HTTPException, status
 
+from app.core.auth_types import EmployeeRole
 from app.models.person import Customer, Employee, Person
 from app.repositories.person_repository import PersonRepository
 
@@ -83,7 +84,7 @@ class PersonService:
             email: str,
             telefon: str | None,
             lozinka: str,
-            uloga: str = "serviser"
+            uloga: EmployeeRole = EmployeeRole.SERVISER
     ) -> Employee:
         self._validate_person_data(
             ime=ime,
@@ -105,7 +106,7 @@ class PersonService:
 
         employee = Employee(
             IdOsobe=created_person.IdOsobe,
-            Uloga=uloga.strip() if uloga else "serviser"
+            Uloga=uloga.value
         )
 
         return self.repository.create_employee(employee)
@@ -142,12 +143,10 @@ class PersonService:
 
         return self.repository.update_person(person)
 
-    def update_employee_role(self, person_id: int, uloga: str) -> Employee:
+    def update_employee_role(self, person_id: int, uloga: EmployeeRole) -> Employee:
         employee = self.get_employee_by_id(person_id)
 
-        self._validate_required_text(uloga, "Uloga")
-
-        employee.Uloga = uloga.strip()
+        employee.Uloga = uloga.value
 
         return self.repository.update_employee(employee)
 
@@ -180,8 +179,7 @@ class PersonService:
             prezime: str | None = None,
             email: str | None = None,
             telefon: str | None = None,
-            lozinka: str | None = None,
-            uloga: str | None = None
+            lozinka: str | None = None
     ) -> Employee:
         employee = self.get_employee_by_id(person_id)
 
@@ -193,11 +191,6 @@ class PersonService:
             telefon=telefon,
             lozinka=lozinka
         )
-
-        if uloga is not None:
-            self._validate_required_text(uloga, "Uloga")
-            employee.Uloga = uloga.strip()
-            employee = self.repository.update_employee(employee)
 
         return employee
 

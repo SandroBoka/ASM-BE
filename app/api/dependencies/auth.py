@@ -4,6 +4,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.auth_types import EmployeeRole, UserType
 from app.db.database import get_db
 from app.repositories.person_repository import PersonRepository
 from app.schemas import AuthUserResponse
@@ -58,7 +59,7 @@ def get_current_user(
 def require_customer(
         current_user: AuthUserResponse = Depends(get_current_user)
 ) -> AuthUserResponse:
-    if current_user.TipKorisnika != "customer":
+    if current_user.TipKorisnika != UserType.CUSTOMER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Pristup je dozvoljen samo korisnicima"
@@ -70,7 +71,7 @@ def require_customer(
 def require_employee(
         current_user: AuthUserResponse = Depends(get_current_user)
 ) -> AuthUserResponse:
-    if current_user.TipKorisnika != "employee":
+    if current_user.TipKorisnika != UserType.EMPLOYEE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Pristup je dozvoljen samo zaposlenicima"
@@ -79,7 +80,7 @@ def require_employee(
     return current_user
 
 
-def require_role(*allowed_roles: str):
+def require_role(*allowed_roles: EmployeeRole):
     def role_checker(
             current_user: AuthUserResponse = Depends(require_employee)
     ) -> AuthUserResponse:
@@ -92,3 +93,32 @@ def require_role(*allowed_roles: str):
         return current_user
 
     return role_checker
+
+
+def is_admin(current_user: AuthUserResponse) -> bool:
+    return (
+        current_user.TipKorisnika == UserType.EMPLOYEE
+        and current_user.Uloga == EmployeeRole.ADMIN
+    )
+
+
+def require_admin(
+        current_user: AuthUserResponse = Depends(require_employee)
+) -> AuthUserResponse:
+    if not is_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Pristup je dozvoljen samo administratorima"
+        )
+
+    return current_user
+
+
+def ensure_admin_or_self(current_user: AuthUserResponse, person_id: int) -> None:
+    if is_admin(current_user) or current_user.IdOsobe == person_id:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Možete pristupiti samo vlastitim podacima"
+    )

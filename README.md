@@ -158,7 +158,7 @@ The migrations create the service catalog table and the current core ASM schema:
 - `rezervacija_usluga`: reservation-service join table
 - `obavijest`: customer notifications
 
-The auth, service catalog, person/customer/employee, and vehicle API modules are currently exposed through HTTP routes.
+The auth, service catalog, person/customer/employee, and vehicle API modules are currently exposed through HTTP routes. Core appointment, reservation, appointment-change, and notification tables exist in the schema, while their full route/service flows are still pending.
 
 ## Running the Application
 
@@ -197,6 +197,13 @@ Public routes:
 - `POST /persons/customers`
 
 `/auth/refresh` and `/auth/logout` do not require an access token because they operate on the refresh token in the request body. All service routes, vehicle routes, `/auth/me`, and all person routes except customer registration require an access token.
+
+The API currently distinguishes authenticated users by:
+
+- `TipKorisnika`: `customer` or `employee`
+- `Uloga`: employee role, currently `admin`, `serviser`, or `voditelj`; customers have `Uloga: null`
+
+Admin users are employees with `Uloga: "admin"`.
 
 ### Health and Database Checks
 
@@ -257,6 +264,8 @@ Access tokens are JWTs valid for 24 hours by default. Refresh tokens are random 
 - `PUT /services/{service_id}`
 - `DELETE /services/{service_id}`
 
+All authenticated users can list and view services. Creating, updating, and deleting services requires an employee account. Customers can read the service catalog, but cannot modify it.
+
 Service request fields:
 
 - `NazivUsluge`: required service name
@@ -288,11 +297,21 @@ Person request fields:
 
 Employee request fields additionally support:
 
-- `Uloga`: employee role, defaulting to `serviser` on create
+- `Uloga`: employee role, defaulting to `serviser` on create; accepted values are `admin`, `serviser`, and `voditelj`
 
 Password values are hashed before they are stored, and response models do not return `Lozinka`.
 
 Customer registration through `POST /persons/customers` is public. All other person/customer/employee routes require an access token.
+
+Current access rules:
+
+- employees can list and view persons, customers, and employees
+- customers can view and update their own customer profile
+- customers can delete their own account
+- only admins can create employees
+- only admins can update generic person records through `PUT /persons/{person_id}`
+- only admins can change employee roles through `PATCH /persons/employees/{employee_id}/role`
+- admins can update or delete any person; non-admin users are restricted to self-owned profile operations where supported
 
 ### Vehicles
 
@@ -313,7 +332,16 @@ Vehicle request fields:
 
 Vehicles belong to customers through `IdOsobe`. Registration plates must be unique.
 
-All vehicle routes require an access token. Deleting a customer also deletes that customer's vehicles through ORM cascade behavior and database foreign-key cascade rules.
+All vehicle routes require an access token. Access is guarded by vehicle ownership:
+
+- employees can list and view customer vehicles
+- customers can list and view only their own vehicles
+- admins can create vehicles for any customer
+- customers can create vehicles only for their own customer profile
+- admins can update or delete any vehicle
+- customers can update or delete only their own vehicles
+
+Deleting a customer also deletes that customer's vehicles through ORM cascade behavior and database foreign-key cascade rules.
 
 ## Module Overview
 
@@ -329,12 +357,13 @@ All vehicle routes require an access token. Deleting a customer also deletes tha
 ### `app/api/dependencies/`
 
 - contains reusable FastAPI dependencies
-- provides auth helpers for reading bearer tokens, loading the current user, and enforcing customer/employee/role-based access
+- provides auth helpers for reading bearer tokens, loading the current user, and enforcing customer/employee/admin/self access rules
 
 ### `app/core/`
 
 - contains application configuration
 - loads environment-based settings from `.env`
+- defines shared auth enum values for user types and employee roles
 
 ### `app/db/`
 

@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
 from app.api.dependencies.auth import get_current_user
+from app.core.auth_types import UserType
 from app.core.config import settings
 from app.db.database import Base, get_db
 from app.main import app
@@ -35,6 +36,17 @@ def override_get_current_user():
         Email="test@example.com",
         TipKorisnika="employee",
         Uloga="admin"
+    )
+
+
+def override_get_current_customer():
+    return AuthUserResponse(
+        IdOsobe=1,
+        Ime="Ivan",
+        Prezime="Horvat",
+        Email="ivan@example.com",
+        TipKorisnika=UserType.CUSTOMER,
+        Uloga=None
     )
 
 
@@ -75,6 +87,22 @@ def test_create_service_api():
     assert data["Opis"] == "Zamjena ulja i filtera"
     assert data["Trajanje"] == 60
     assert data["Cijena"] == "150.00"
+
+
+def test_customer_cannot_create_service_api():
+    app.dependency_overrides[get_current_user] = override_get_current_customer
+
+    response = client.post(
+        "/services",
+        json={
+            "NazivUsluge": "Redovni servis",
+            "Opis": "Zamjena ulja i filtera",
+            "Trajanje": 60,
+            "Cijena": "150.00"
+        }
+    )
+
+    assert response.status_code == 403
 
 
 def test_get_services_api():

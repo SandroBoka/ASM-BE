@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
 from app.api.dependencies.auth import get_current_user
+from app.core.auth_types import UserType
 from app.core.config import settings
 from app.db.database import Base, get_db
 from app.main import app
@@ -36,6 +37,20 @@ def override_get_current_user():
         TipKorisnika="employee",
         Uloga="admin"
     )
+
+
+def override_current_customer(person_id: int):
+    def _override_get_current_customer():
+        return AuthUserResponse(
+            IdOsobe=person_id,
+            Ime="Ivan",
+            Prezime="Horvat",
+            Email=f"ivan{person_id}@example.com",
+            TipKorisnika=UserType.CUSTOMER,
+            Uloga=None
+        )
+
+    return _override_get_current_customer
 
 
 app.dependency_overrides[get_db] = override_get_db
@@ -98,6 +113,40 @@ def test_create_vehicle_api():
     assert data["VrstaMotora"] == "diesel"
     assert data["RegOznaka"] == "ZG-123-AB"
     assert data["IdOsobe"] == customer_id
+
+
+def test_customer_cannot_create_vehicle_for_another_customer_api():
+    owner_id = create_customer()
+
+    response = client.post(
+        "/persons/customers",
+        json={
+            "Ime": "Ana",
+            "Prezime": "Ivic",
+            "Email": "ana@example.com",
+            "Telefon": None,
+            "Lozinka": "tajna456"
+        }
+    )
+
+    assert response.status_code == 201
+
+    other_customer_id = response.json()["IdOsobe"]
+    app.dependency_overrides[get_current_user] = override_current_customer(owner_id)
+
+    response = client.post(
+        "/vehicles",
+        json={
+            "Marka": "Volkswagen",
+            "Model": "Golf",
+            "Godina": 2018,
+            "VrstaMotora": "diesel",
+            "RegOznaka": "ZG-123-AB",
+            "IdOsobe": other_customer_id
+        }
+    )
+
+    assert response.status_code == 403
 
 
 def test_get_vehicle_api():

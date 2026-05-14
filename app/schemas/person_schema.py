@@ -1,5 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, EmailStr
 
+from app.core.auth_types import EmployeeRole
+
 
 class PersonBase(BaseModel):
     Ime: str
@@ -39,16 +41,16 @@ class CustomerResponse(PersonResponse):
 
 
 class EmployeeCreate(PersonCreate):
-    Uloga: str = "serviser"
+    Uloga: EmployeeRole = EmployeeRole.SERVISER
 
 
 class EmployeeUpdate(PersonUpdate):
-    Uloga: str | None = None
+    pass
 
 
 class EmployeeRoleUpdate(BaseModel):
-    Uloga: str
+    Uloga: EmployeeRole
 
 
 class EmployeeResponse(PersonResponse):
-    Uloga: str
+    Uloga: EmployeeRole

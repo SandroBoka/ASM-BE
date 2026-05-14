@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_types import UserType
 from app.db.database import get_db
 from app.repositories.person_repository import PersonRepository
 from app.schemas import AuthUserResponse
@@ -17,7 +18,12 @@ from app.schemas.person_schema import (
 )
 from app.services.person_service import PersonService
 from app.models.person import Customer, Employee
-from app.api.dependencies.auth import get_current_user
+from app.api.dependencies.auth import (
+    ensure_admin_or_self,
+    get_current_user,
+    require_admin,
+    require_employee
+)
 
 router = APIRouter(
     prefix="/persons",
@@ -54,7 +60,7 @@ def employee_to_response(employee: Employee) -> dict:
 @router.get("", response_model=list[PersonResponse])
 def get_all_persons(
         service: PersonService = Depends(get_person_service),
-        current_user: AuthUserResponse = Depends(get_current_user)
+        current_user: AuthUserResponse = Depends(require_employee)
 ):
     return service.get_all_persons()
 
@@ -63,7 +69,7 @@ def get_all_persons(
 def get_person(
         person_id: int,
         service: PersonService = Depends(get_person_service),
-        current_user: AuthUserResponse = Depends(get_current_user)
+        current_user: AuthUserResponse = Depends(require_employee)
 ):
     return service.get_person_by_id(person_id)
 
@@ -74,6 +80,15 @@ def get_customer(
         service: PersonService = Depends(get_person_service),
         current_user: AuthUserResponse = Depends(get_current_user)
 ):
+    if (
+            current_user.TipKorisnika != UserType.EMPLOYEE
+            and current_user.IdOsobe != customer_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Možete pristupiti samo vlastitim podacima"
+        )
+
     return customer_to_response(service.get_customer_by_id(customer_id))
 
 
@@ -81,7 +96,7 @@ def get_customer(
 def get_employee(
         employee_id: int,
         service: PersonService = Depends(get_person_service),
-        current_user: AuthUserResponse = Depends(get_current_user)
+        current_user: AuthUserResponse = Depends(require_employee)
 ):
     return employee_to_response(service.get_employee_by_id(employee_id))
 
@@ -106,7 +121,7 @@ def create_customer(
 def create_employee(
         request: EmployeeCreate,
         service: PersonService = Depends(get_person_service),
-        current_user: AuthUserResponse = Depends(get_current_user)
+        current_user: AuthUserResponse = Depends(require_admin)
 ):
     employee = service.create_employee(
         ime=request.Ime,
@@ -125,7 +140,7 @@ def update_person(
         person_id: int,
         request: PersonUpdate,
         service: PersonService = Depends(get_person_service),
-        current_user: AuthUserResponse = Depends(get_current_user)
+        current_user: AuthUserResponse = Depends(require_admin)
 ):
     return service.update_person(
         person_id=person_id,
@@ -144,6 +159,8 @@ def update_customer(
         service: PersonService = Depends(get_person_service),
         current_user: AuthUserResponse = Depends(get_current_user)
 ):
+    ensure_admin_or_self(current_user, customer_id)
+
     customer = service.update_customer(
         person_id=customer_id,
         ime=request.Ime,
@@ -163,14 +180,15 @@ def update_employee(
         service: PersonService = Depends(get_person_service),
         current_user: AuthUserResponse = Depends(get_current_user)
 ):
+    ensure_admin_or_self(current_user, employee_id)
+
     employee = service.update_employee(
         person_id=employee_id,
         ime=request.Ime,
         prezime=request.Prezime,
         email=str(request.Email) if request.Email is not None else None,
         telefon=request.Telefon,
-        lozinka=request.Lozinka,
-        uloga=request.Uloga
+        lozinka=request.Lozinka
     )
 
     return employee_to_response(employee)
@@ -181,7 +199,7 @@ def update_employee_role(
         employee_id: int,
         request: EmployeeRoleUpdate,
         service: PersonService = Depends(get_person_service),
-        current_user: AuthUserResponse = Depends(get_current_user)
+        current_user: AuthUserResponse = Depends(require_admin)
 ):
     employee = service.update_employee_role(
         person_id=employee_id,
@@ -197,4 +215,7 @@ def delete_person(
         service: PersonService = Depends(get_person_service),
         current_user: AuthUserResponse = Depends(get_current_user)
 ):
+
+    ensure_admin_or_self(current_user, person_id)
+
     service.delete_person(person_id)

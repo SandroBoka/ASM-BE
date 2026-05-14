@@ -1,5 +1,7 @@
 from pydantic import BaseModel, EmailStr
 
+from app.core.auth_types import UserType, EmployeeRole
+
 
 class LoginRequest(BaseModel):
     Email: EmailStr
@@ -19,8 +21,8 @@ class AuthUserResponse(BaseModel):
     Ime: str
     Prezime: str
     Email: EmailStr
-    TipKorisnika: str
-    Uloga: str | None = None
+    TipKorisnika: UserType
+    Uloga: EmployeeRole | None = None
 
 
 class AuthTokenResponse(BaseModel):

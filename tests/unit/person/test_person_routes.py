@@ -5,6 +5,7 @@ import app.models  # noqa: F401
 from fastapi.testclient import TestClient
 
 from app.api.dependencies.auth import get_current_user
+from app.core.auth_types import EmployeeRole, UserType
 from app.core.config import settings
 from app.db.database import Base, get_db
 from app.main import app
@@ -36,6 +37,28 @@ def override_get_current_user():
         Email="test@example.com",
         TipKorisnika="employee",
         Uloga="admin"
+    )
+
+
+def override_get_current_employee():
+    return AuthUserResponse(
+        IdOsobe=1,
+        Ime="Test",
+        Prezime="User",
+        Email="employee@example.com",
+        TipKorisnika=UserType.EMPLOYEE,
+        Uloga=EmployeeRole.SERVISER
+    )
+
+
+def override_get_current_customer():
+    return AuthUserResponse(
+        IdOsobe=1,
+        Ime="Ivan",
+        Prezime="Horvat",
+        Email="ivan@example.com",
+        TipKorisnika=UserType.CUSTOMER,
+        Uloga=None
     )
 
 
@@ -120,6 +143,32 @@ def test_create_customer_api():
     assert "Lozinka" not in data
 
 
+def test_customer_can_update_own_profile_api():
+    create_response = client.post(
+        "/persons/customers",
+        json={
+            "Ime": "Ivan",
+            "Prezime": "Horvat",
+            "Email": "ivan@example.com",
+            "Telefon": None,
+            "Lozinka": "tajna123"
+        }
+    )
+
+    customer_id = create_response.json()["IdOsobe"]
+    app.dependency_overrides[get_current_user] = override_get_current_customer
+
+    response = client.put(
+        f"/persons/customers/{customer_id}",
+        json={
+            "Ime": "Ivica"
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json()["Ime"] == "Ivica"
+
+
 def test_create_employee_api():
     response = client.post(
         "/persons/employees",
@@ -141,6 +190,24 @@ def test_create_employee_api():
     assert data["Email"] == "petar@example.com"
     assert data["Uloga"] == "serviser"
     assert "Lozinka" not in data
+
+
+def test_non_admin_employee_cannot_create_employee_api():
+    app.dependency_overrides[get_current_user] = override_get_current_employee
+
+    response = client.post(
+        "/persons/employees",
+        json={
+            "Ime": "Petar",
+            "Prezime": "Novak",
+            "Email": "petar@example.com",
+            "Telefon": None,
+            "Lozinka": "tajna123",
+            "Uloga": "serviser"
+        }
+    )
+
+    assert response.status_code == 403
 
 
 def test_update_customer_api():

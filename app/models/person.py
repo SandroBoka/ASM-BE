@@ -1,6 +1,7 @@
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
+from app.core.auth_types import EmployeeRole
 from app.db.database import Base
 
 
@@ -57,7 +58,7 @@ class Employee(Base):
 
     IdOsobe = Column(Integer, ForeignKey("osoba.IdOsobe", ondelete="CASCADE"), primary_key=True)
 
-    Uloga = Column(String(50), nullable=False, default="serviser")
+    Uloga = Column(String(50), nullable=False, default=EmployeeRole.SERVISER.value)
 
     person = relationship("Person", back_populates="employee_profile")
 

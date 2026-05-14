@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.repositories.service_repository import ServiceRepository
+from app.schemas import AuthUserResponse
 from app.schemas.service_schema import ServiceCreate, ServiceResponse, ServiceUpdate
 from app.services.service_catalog_service import ServiceCatalogService
-from app.api.dependencies.auth import get_current_user
+from app.api.dependencies.auth import get_current_user, require_employee
 
 router = APIRouter(
     prefix="/services",
@@ -38,7 +39,8 @@ def get_service(
 @router.post("", response_model=ServiceResponse, status_code=status.HTTP_201_CREATED)
 def create_service(
         request: ServiceCreate,
-        service: ServiceCatalogService = Depends(get_service_catalog_service)
+        service: ServiceCatalogService = Depends(get_service_catalog_service),
+        current_user: AuthUserResponse = Depends(require_employee)
 ):
     return service.create_service(
         naziv_usluge=request.NazivUsluge,
@@ -52,7 +54,8 @@ def create_service(
 def update_service(
         service_id: int,
         request: ServiceUpdate,
-        service: ServiceCatalogService = Depends(get_service_catalog_service)
+        service: ServiceCatalogService = Depends(get_service_catalog_service),
+        current_user: AuthUserResponse = Depends(require_employee)
 ):
     return service.update_service(
         service_id=service_id,
@@ -66,6 +69,7 @@ def update_service(
 @router.delete("/{service_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_service(
         service_id: int,
-        service: ServiceCatalogService = Depends(get_service_catalog_service)
+        service: ServiceCatalogService = Depends(get_service_catalog_service),
+        current_user: AuthUserResponse = Depends(require_employee)
 ):
     service.delete_service(service_id)
