@@ -1,0 +1,123 @@
+from fastapi import HTTPException, status
+
+from app.models.notification import Notification
+from app.models.reservation import Reservation
+from app.repositories.notification_repository import NotificationRepository
+from app.services.email_service import EmailService
+
+
+class NotificationService:
+    def __init__(
+            self,
+            repository: NotificationRepository,
+            email_service: EmailService,
+    ):
+        self.repository = repository
+        self.email_service = email_service
+
+    def notify_reservation_created(self, reservation: Reservation) -> Notification:
+        naslov = "Rezervacija zaprimljena"
+        tekst = self._format_created_text(reservation)
+        return self._send_and_save(reservation, naslov, tekst)
+
+    def notify_reservation_approved(self, reservation: Reservation) -> Notification:
+        naslov = "Rezervacija odobrena"
+        tekst = self._format_approved_text(reservation)
+        return self._send_and_save(reservation, naslov, tekst)
+
+    def notify_reservation_rejected(self, reservation: Reservation) -> Notification:
+        naslov = "Rezervacija odbijena"
+        tekst = self._format_rejected_text(reservation)
+        return self._send_and_save(reservation, naslov, tekst)
+
+    def get_notifications_for_customer(self, customer_id: int) -> list[Notification]:
+        return self.repository.get_by_customer_id(customer_id)
+
+    def get_unread_for_customer(self, customer_id: int) -> list[Notification]:
+        return self.repository.get_unread_by_customer_id(customer_id)
+
+    def mark_as_read(self, notification_id: int, customer_id: int) -> Notification:
+        notification = self.repository.get_by_id(notification_id)
+
+        if notification is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Obavijest nije pronađena."
+            )
+
+        if notification.IdOsobe != customer_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Možete označiti samo vlastite obavijesti kao pročitane."
+            )
+
+        if notification.Procitana:
+            return notification
+
+        notification.Procitana = True
+        return self.repository.update(notification)
+
+    def _send_and_save(
+            self,
+            reservation: Reservation,
+            naslov: str,
+            tekst: str,
+    ) -> Notification:
+        notification = Notification(
+            Naslov=naslov,
+            Tekst=tekst,
+            IdOsobe=reservation.IdOsobe_Korisnik,
+            IdRezervacije=reservation.IdRezervacije,
+            Procitana=False,
+        )
+        saved = self.repository.create(notification)
+
+        recipient_email = reservation.customer.person.Email
+        self.email_service.send(
+            recipient=recipient_email,
+            subject=naslov,
+            body=tekst,
+        )
+
+        return saved
+
+    @staticmethod
+    def _format_created_text(reservation: Reservation) -> str:
+        datum = reservation.appointment.Datum.strftime("%d.%m.%Y.")
+        vrijeme = reservation.appointment.VrijemeOd.strftime("%H:%M")
+        return (
+            f"Vaša rezervacija za {datum} u {vrijeme} je zaprimljena "
+            f"i čeka obradu zaposlenika."
+        )
+
+    @staticmethod
+    def _format_approved_text(reservation: Reservation) -> str:
+        datum = reservation.appointment.Datum.strftime("%d.%m.%Y.")
+        vrijeme = reservation.appointment.VrijemeOd.strftime("%H:%M")
+        reg_oznaka = reservation.vehicle.RegOznaka
+
+        lines = [
+            f"Vaša rezervacija za {datum} u {vrijeme} je odobrena.",
+            f"Očekujemo Vas s vozilom {reg_oznaka}.",
+        ]
+
+        if reservation.KomentarZaposlenika:
+            lines.append("")
+            lines.append(f"Komentar zaposlenika: {reservation.KomentarZaposlenika}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_rejected_text(reservation: Reservation) -> str:
+        datum = reservation.appointment.Datum.strftime("%d.%m.%Y.")
+        vrijeme = reservation.appointment.VrijemeOd.strftime("%H:%M")
+
+        lines = [
+            f"Vaša rezervacija za {datum} u {vrijeme} je odbijena.",
+        ]
+
+        if reservation.KomentarZaposlenika:
+            lines.append("")
+            lines.append(f"Komentar zaposlenika: {reservation.KomentarZaposlenika}")
+
+        return "\n".join(lines)
