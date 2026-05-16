@@ -9,6 +9,7 @@ from app.api.dependencies.auth import (
 from app.core.auth_types import UserType
 from app.db.database import get_db
 from app.repositories.appointment_repository import AppointmentRepository
+from app.repositories.notification_repository import NotificationRepository
 from app.repositories.reservation_repository import ReservationRepository
 from app.repositories.service_repository import ServiceRepository
 from app.repositories.vehicle_repository import VehicleRepository
@@ -19,6 +20,8 @@ from app.schemas.reservation_schema import (
     ReservationResponse,
 )
 from app.services.appointment_service import AppointmentService
+from app.services.email_service import EmailService
+from app.services.notification_service import NotificationService
 from app.services.reservation_service import ReservationService
 from app.services.service_catalog_service import ServiceCatalogService
 from app.services.vehicle_service import VehicleService
@@ -47,6 +50,12 @@ def get_reservation_service(db: Session = Depends(get_db)) -> ReservationService
     )
 
 
+def get_notification_service(db: Session = Depends(get_db)) -> NotificationService:
+    repository = NotificationRepository(db)
+    email_service = EmailService()
+    return NotificationService(repository=repository, email_service=email_service)
+
+
 def ensure_employee_or_reservation_owner(
         current_user: AuthUserResponse,
         owner_id: int
@@ -66,11 +75,12 @@ def ensure_employee_or_reservation_owner(
 def create_reservation(
         request: ReservationCreate,
         service: ReservationService = Depends(get_reservation_service),
+        notification_service: NotificationService = Depends(get_notification_service),
         current_user: AuthUserResponse = Depends(get_current_user),
 ):
     ensure_admin_or_self(current_user, request.IdOsobe_Korisnik)
 
-    return service.create_reservation(
+    reservation = service.create_reservation(
         id_osobe_korisnik=request.IdOsobe_Korisnik,
         id_termina=request.IdTermina,
         id_vozila=request.IdVozila,
@@ -78,6 +88,10 @@ def create_reservation(
         opis_problema=request.OpisProblema,
         services=request.services,
     )
+
+    notification_service.notify_reservation_created(reservation)
+
+    return reservation
 
 
 @router.get("/pending", response_model=list[ReservationResponse])
@@ -124,13 +138,18 @@ def approve_reservation(
         reservation_id: int,
         request: ReservationActionRequest,
         service: ReservationService = Depends(get_reservation_service),
+        notification_service: NotificationService = Depends(get_notification_service),
         current_user: AuthUserResponse = Depends(require_employee),
 ):
-    return service.approve_reservation(
+    reservation = service.approve_reservation(
         reservation_id=reservation_id,
         id_osobe_zaposlenik=current_user.IdOsobe,
         komentar=request.komentar,
     )
+
+    notification_service.notify_reservation_approved(reservation)
+
+    return reservation
 
 
 @router.post("/{reservation_id}/reject", response_model=ReservationResponse)
@@ -138,13 +157,18 @@ def reject_reservation(
         reservation_id: int,
         request: ReservationActionRequest,
         service: ReservationService = Depends(get_reservation_service),
+        notification_service: NotificationService = Depends(get_notification_service),
         current_user: AuthUserResponse = Depends(require_employee),
 ):
-    return service.reject_reservation(
+    reservation = service.reject_reservation(
         reservation_id=reservation_id,
         id_osobe_zaposlenik=current_user.IdOsobe,
         komentar=request.komentar,
     )
+
+    notification_service.notify_reservation_rejected(reservation)
+
+    return reservation
 
 
 @router.post("/{reservation_id}/cancel", response_model=ReservationResponse)
