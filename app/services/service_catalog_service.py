@@ -36,6 +36,7 @@ class ServiceCatalogService:
             trajanje=trajanje,
             cijena=cijena
         )
+        self._check_name_uniqueness(naziv_usluge=naziv_usluge)
 
         service = Service(
             NazivUsluge=naziv_usluge,
@@ -61,6 +62,7 @@ class ServiceCatalogService:
             trajanje=trajanje,
             cijena=cijena
         )
+        self._check_name_uniqueness(naziv_usluge=naziv_usluge, exclude_id=service_id)
 
         service.NazivUsluge = naziv_usluge
         service.Opis = opis
@@ -96,3 +98,18 @@ class ServiceCatalogService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cijena usluge ne može biti negativna."
             )
+
+    def _check_name_uniqueness(
+            self,
+            naziv_usluge: str,
+            exclude_id: int | None = None,
+    ) -> None:
+        existing = self.repository.get_by_name_case_insensitive(naziv_usluge)
+        if existing is None:
+            return
+        if exclude_id is not None and existing.IdUsluge == exclude_id:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Usluga s nazivom '{naziv_usluge.strip()}' već postoji."
+        )
