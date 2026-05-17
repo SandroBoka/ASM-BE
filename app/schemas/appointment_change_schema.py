@@ -19,6 +19,15 @@ class AppointmentChangeProcess(BaseModel):
     IdOsobe_Zaposlenik: int
 
 
+class AppointmentChangeRequest(BaseModel):
+    IdRezervacije: int
+    IdNovogTermina: int
+
+
+class AppointmentChangeActionRequest(BaseModel):
+    komentar: str | None = None
+
+
 class AppointmentChangeUpdate(BaseModel):
     Status: str | None = None
     KomentarZaposlenika: str | None = None

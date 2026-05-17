@@ -13,3 +13,9 @@ class ReservationStatus(str, Enum):
     ODBIJENA = "odbijena"
     OTKAZANA = "otkazana"
     ZAVRSENA = "zavrsena"
+
+
+class AppointmentChangeStatus(str, Enum):
+    NA_CEKANJU = "na cekanju"
+    PRIHVACEN = "prihvacen"
+    ODBIJEN = "odbijen"

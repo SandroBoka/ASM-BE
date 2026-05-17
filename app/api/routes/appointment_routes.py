@@ -52,7 +52,7 @@ def get_all_appointments(
 def get_appointment(
         appointment_id: int,
         service: AppointmentService = Depends(get_appointment_service),
-        _: AuthUserResponse = Depends(require_employee)
+        _: AuthUserResponse = Depends(get_current_user)
 ):
     return service.get_appointment_by_id(appointment_id)
 

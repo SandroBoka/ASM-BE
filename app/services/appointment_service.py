@@ -90,7 +90,17 @@ class AppointmentService:
         if appointment.Status == AppointmentStatus.ZAUZET:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Zauzet termin nije moguće obrisati. Prvo otkažite rezervaciju."
+                detail="Ovaj termin se može samo otkazati, a ne obrisati."
+            )
+
+        if (
+            appointment.reservations
+            or appointment.old_appointment_changes
+            or appointment.new_appointment_changes
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ovaj termin se može samo otkazati, a ne obrisati."
             )
 
         self.repository.delete(appointment)

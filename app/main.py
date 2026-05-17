@@ -10,6 +10,7 @@ from app.api.routes.auth_routes import router as auth_router
 from app.api.routes.appointment_routes import router as appointment_router
 from app.api.routes.reservation_routes import router as reservation_router
 from app.api.routes.notification_routes import router as notification_router
+from app.api.routes.appointment_change_routes import router as appointment_change_router
 
 app = FastAPI(
     title="ASM Backend",
@@ -33,3 +34,4 @@ app.include_router(auth_router)
 app.include_router(appointment_router)
 app.include_router(reservation_router)
 app.include_router(notification_router)
+app.include_router(appointment_change_router)
