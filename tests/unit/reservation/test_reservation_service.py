@@ -61,6 +61,23 @@ class FakeReservationRepository:
         self.service_links.append(link)
         return link
 
+    def delete_services(self, reservation_id):
+        self.service_links = [
+            link for link in self.service_links if link.IdRezervacije != reservation_id
+        ]
+
+    def get_service_link(self, reservation_id, id_usluge):
+        for link in self.service_links:
+            if link.IdRezervacije == reservation_id and link.IdUsluge == id_usluge:
+                return link
+        return None
+
+    def update_service_link(self, link):
+        return link
+
+    def delete_service_link(self, link):
+        self.service_links.remove(link)
+
     def update(self, reservation):
         return reservation
 
@@ -592,3 +609,286 @@ def test_complete_reservation_conflict_from_pending():
         service.complete_reservation(reservation_id=1)
 
     assert error.value.status_code == 409
+
+
+def _make_pending_reservation(repository, customer_id=100, appointment_id=1, vehicle_id=10):
+    reservation = SimpleNamespace(
+        IdRezervacije=1,
+        Status=ReservationStatus.NA_CEKANJU.value,
+        IdOsobe_Korisnik=customer_id,
+        IdTermina=appointment_id,
+        IdVozila=vehicle_id,
+        KilometrazaVozila=50000,
+        OpisProblema="old problem",
+        KomentarZaposlenika=None,
+        IdOsobe_Zaposlenik=None,
+    )
+    repository.reservations.append(reservation)
+    repository.service_links.append(SimpleNamespace(IdRezervacije=1, IdUsluge=1000, Kolicina=1))
+    return reservation
+
+
+def test_update_reservation_header_success():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    appointment_service.add(2)
+    _make_pending_reservation(repository)
+
+    updated = service.update_reservation_header(
+        reservation_id=1,
+        id_osobe_korisnik=100,
+        id_termina=2,
+        id_vozila=10,
+        kilometraza_vozila=75000,
+        opis_problema="  updated problem  ",
+    )
+
+    assert updated.IdTermina == 2
+    assert updated.KilometrazaVozila == 75000
+    assert updated.OpisProblema == "updated problem"
+
+
+def test_update_reservation_header_fails_when_status_is_not_pending():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    reservation = _make_pending_reservation(repository)
+    reservation.Status = ReservationStatus.ODOBRENA.value
+
+    with pytest.raises(HTTPException) as error:
+        service.update_reservation_header(
+            reservation_id=1,
+            id_osobe_korisnik=100,
+            id_termina=1,
+            id_vozila=10,
+            kilometraza_vozila=60000,
+            opis_problema="x",
+        )
+
+    assert error.value.status_code == 409
+
+
+def test_update_reservation_header_fails_when_not_owner():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    _make_pending_reservation(repository, customer_id=100)
+
+    with pytest.raises(HTTPException) as error:
+        service.update_reservation_header(
+            reservation_id=1,
+            id_osobe_korisnik=999,
+            id_termina=1,
+            id_vozila=10,
+            kilometraza_vozila=60000,
+            opis_problema="x",
+        )
+
+    assert error.value.status_code == 403
+
+
+def test_update_reservation_header_fails_when_new_appointment_not_free():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    appointment_service.add(2, status_value=AppointmentStatus.ZAUZET.value)
+    _make_pending_reservation(repository)
+
+    with pytest.raises(HTTPException) as error:
+        service.update_reservation_header(
+            reservation_id=1,
+            id_osobe_korisnik=100,
+            id_termina=2,
+            id_vozila=10,
+            kilometraza_vozila=60000,
+            opis_problema="x",
+        )
+
+    assert error.value.status_code == 409
+
+
+def test_update_reservation_header_allows_same_appointment_without_availability_check():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    appointment_service.appointments[1].Status = AppointmentStatus.ZAUZET.value
+    _make_pending_reservation(repository)
+
+    updated = service.update_reservation_header(
+        reservation_id=1,
+        id_osobe_korisnik=100,
+        id_termina=1,
+        id_vozila=10,
+        kilometraza_vozila=80000,
+        opis_problema="same slot",
+    )
+
+    assert updated.IdTermina == 1
+    assert updated.KilometrazaVozila == 80000
+
+
+def _make_appointment_with_slot(appointment_service, appointment_id=1, minutes_from=0, minutes_to=60):
+    from datetime import time
+    appointment = appointment_service.appointments[appointment_id]
+    appointment.VrijemeOd = time(hour=minutes_from // 60, minute=minutes_from % 60)
+    appointment.VrijemeDo = time(hour=minutes_to // 60, minute=minutes_to % 60)
+    return appointment
+
+
+def _attach_services_relationship(repository, reservation, service_catalog_service):
+    """Set up reservation.reservation_services with the catalog so slot capacity check works."""
+    reservation.reservation_services = [
+        link for link in repository.service_links if link.IdRezervacije == reservation.IdRezervacije
+    ]
+    # ensure catalog has Trajanje for the linked services
+    for link in reservation.reservation_services:
+        if link.IdUsluge not in service_catalog_service.services:
+            service_catalog_service.add(link.IdUsluge)
+        service_catalog_service.services[link.IdUsluge].Trajanje = 30
+
+
+def test_add_service_to_reservation_success():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    _make_appointment_with_slot(appointment_service, appointment_id=1, minutes_from=8 * 60, minutes_to=9 * 60)
+    reservation = _make_pending_reservation(repository)
+    _attach_services_relationship(repository, reservation, service_catalog_service)
+    service_catalog_service.add(2000)
+    service_catalog_service.services[2000].Trajanje = 20
+
+    link = service.add_service_to_reservation(
+        reservation_id=1,
+        id_osobe_korisnik=100,
+        id_usluge=2000,
+        kolicina=1,
+    )
+
+    assert link.IdUsluge == 2000
+    assert link.Kolicina == 1
+    assert any(l.IdUsluge == 2000 for l in repository.service_links)
+
+
+def test_add_service_to_reservation_rejects_duplicate():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    _make_appointment_with_slot(appointment_service, appointment_id=1, minutes_from=8 * 60, minutes_to=9 * 60)
+    reservation = _make_pending_reservation(repository)
+    _attach_services_relationship(repository, reservation, service_catalog_service)
+
+    with pytest.raises(HTTPException) as error:
+        service.add_service_to_reservation(
+            reservation_id=1,
+            id_osobe_korisnik=100,
+            id_usluge=1000,
+            kolicina=1,
+        )
+
+    assert error.value.status_code == 409
+    assert "već dodana" in error.value.detail
+
+
+def test_add_service_to_reservation_rejects_when_slot_exceeded():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    _make_appointment_with_slot(appointment_service, appointment_id=1, minutes_from=8 * 60, minutes_to=9 * 60)
+    reservation = _make_pending_reservation(repository)
+    _attach_services_relationship(repository, reservation, service_catalog_service)
+    service_catalog_service.add(2000)
+    service_catalog_service.services[2000].Trajanje = 45
+
+    with pytest.raises(HTTPException) as error:
+        service.add_service_to_reservation(
+            reservation_id=1,
+            id_osobe_korisnik=100,
+            id_usluge=2000,
+            kolicina=1,
+        )
+
+    assert error.value.status_code == 409
+    assert "ne stane" in error.value.detail
+
+
+def test_update_service_quantity_success():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    _make_appointment_with_slot(appointment_service, appointment_id=1, minutes_from=8 * 60, minutes_to=10 * 60)
+    reservation = _make_pending_reservation(repository)
+    _attach_services_relationship(repository, reservation, service_catalog_service)
+
+    link = service.update_service_quantity(
+        reservation_id=1,
+        id_osobe_korisnik=100,
+        id_usluge=1000,
+        kolicina=3,
+    )
+
+    assert link.Kolicina == 3
+
+
+def test_update_service_quantity_rejects_when_exceeds_slot():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    _make_appointment_with_slot(appointment_service, appointment_id=1, minutes_from=8 * 60, minutes_to=9 * 60)
+    reservation = _make_pending_reservation(repository)
+    _attach_services_relationship(repository, reservation, service_catalog_service)
+
+    with pytest.raises(HTTPException) as error:
+        service.update_service_quantity(
+            reservation_id=1,
+            id_osobe_korisnik=100,
+            id_usluge=1000,
+            kolicina=5,
+        )
+
+    assert error.value.status_code == 409
+
+
+def test_update_service_quantity_fails_when_service_not_in_reservation():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    _make_appointment_with_slot(appointment_service, appointment_id=1, minutes_from=8 * 60, minutes_to=9 * 60)
+    reservation = _make_pending_reservation(repository)
+    _attach_services_relationship(repository, reservation, service_catalog_service)
+
+    with pytest.raises(HTTPException) as error:
+        service.update_service_quantity(
+            reservation_id=1,
+            id_osobe_korisnik=100,
+            id_usluge=9999,
+            kolicina=1,
+        )
+
+    assert error.value.status_code == 404
+
+
+def test_remove_service_from_reservation_success():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    _make_appointment_with_slot(appointment_service, appointment_id=1, minutes_from=8 * 60, minutes_to=10 * 60)
+    reservation = _make_pending_reservation(repository)
+    service_catalog_service.add(2000)
+    service_catalog_service.services[2000].Trajanje = 30
+    repository.service_links.append(SimpleNamespace(IdRezervacije=1, IdUsluge=2000, Kolicina=1))
+    _attach_services_relationship(repository, reservation, service_catalog_service)
+
+    service.remove_service_from_reservation(
+        reservation_id=1,
+        id_osobe_korisnik=100,
+        id_usluge=2000,
+    )
+
+    assert not any(l.IdUsluge == 2000 for l in repository.service_links)
+
+
+def test_remove_service_from_reservation_rejects_when_last_one():
+    service, repository, appointment_service, vehicle_service, service_catalog_service = _make_service()
+    _setup_world(appointment_service, vehicle_service, service_catalog_service)
+    _make_appointment_with_slot(appointment_service, appointment_id=1, minutes_from=8 * 60, minutes_to=9 * 60)
+    reservation = _make_pending_reservation(repository)
+    _attach_services_relationship(repository, reservation, service_catalog_service)
+
+    with pytest.raises(HTTPException) as error:
+        service.remove_service_from_reservation(
+            reservation_id=1,
+            id_osobe_korisnik=100,
+            id_usluge=1000,
+        )
+
+    assert error.value.status_code == 409
+    assert "barem jednu" in error.value.detail

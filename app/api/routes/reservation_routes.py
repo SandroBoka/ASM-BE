@@ -17,7 +17,11 @@ from app.schemas import AuthUserResponse
 from app.schemas.reservation_schema import (
     ReservationActionRequest,
     ReservationCreate,
+    ReservationCustomerUpdate,
     ReservationResponse,
+    ReservationServiceAdd,
+    ReservationServiceItemResponse,
+    ReservationServiceQuantityUpdate,
 )
 from app.services.appointment_service import AppointmentService
 from app.services.email_service import EmailService
@@ -131,6 +135,90 @@ def get_reservation(
     ensure_employee_or_reservation_owner(current_user, reservation.IdOsobe_Korisnik)
 
     return reservation
+
+
+@router.put("/{reservation_id}", response_model=ReservationResponse)
+def update_reservation_header(
+        reservation_id: int,
+        request: ReservationCustomerUpdate,
+        service: ReservationService = Depends(get_reservation_service),
+        current_user: AuthUserResponse = Depends(get_current_user),
+):
+    existing = service.get_reservation_by_id(reservation_id)
+    ensure_admin_or_self(current_user, existing.IdOsobe_Korisnik)
+
+    return service.update_reservation_header(
+        reservation_id=reservation_id,
+        id_osobe_korisnik=existing.IdOsobe_Korisnik,
+        id_termina=request.IdTermina,
+        id_vozila=request.IdVozila,
+        kilometraza_vozila=request.KilometrazaVozila,
+        opis_problema=request.OpisProblema,
+    )
+
+
+@router.post(
+    "/{reservation_id}/services",
+    response_model=ReservationServiceItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_service_to_reservation(
+        reservation_id: int,
+        request: ReservationServiceAdd,
+        service: ReservationService = Depends(get_reservation_service),
+        current_user: AuthUserResponse = Depends(get_current_user),
+):
+    existing = service.get_reservation_by_id(reservation_id)
+    ensure_admin_or_self(current_user, existing.IdOsobe_Korisnik)
+
+    return service.add_service_to_reservation(
+        reservation_id=reservation_id,
+        id_osobe_korisnik=existing.IdOsobe_Korisnik,
+        id_usluge=request.IdUsluge,
+        kolicina=request.Kolicina,
+    )
+
+
+@router.put(
+    "/{reservation_id}/services/{service_id}",
+    response_model=ReservationServiceItemResponse,
+)
+def update_reservation_service_quantity(
+        reservation_id: int,
+        service_id: int,
+        request: ReservationServiceQuantityUpdate,
+        service: ReservationService = Depends(get_reservation_service),
+        current_user: AuthUserResponse = Depends(get_current_user),
+):
+    existing = service.get_reservation_by_id(reservation_id)
+    ensure_admin_or_self(current_user, existing.IdOsobe_Korisnik)
+
+    return service.update_service_quantity(
+        reservation_id=reservation_id,
+        id_osobe_korisnik=existing.IdOsobe_Korisnik,
+        id_usluge=service_id,
+        kolicina=request.Kolicina,
+    )
+
+
+@router.delete(
+    "/{reservation_id}/services/{service_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_service_from_reservation(
+        reservation_id: int,
+        service_id: int,
+        service: ReservationService = Depends(get_reservation_service),
+        current_user: AuthUserResponse = Depends(get_current_user),
+):
+    existing = service.get_reservation_by_id(reservation_id)
+    ensure_admin_or_self(current_user, existing.IdOsobe_Korisnik)
+
+    service.remove_service_from_reservation(
+        reservation_id=reservation_id,
+        id_osobe_korisnik=existing.IdOsobe_Korisnik,
+        id_usluge=service_id,
+    )
 
 
 @router.post("/{reservation_id}/approve", response_model=ReservationResponse)

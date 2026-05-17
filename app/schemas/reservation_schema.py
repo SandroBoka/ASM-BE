@@ -46,6 +46,22 @@ class ReservationUpdate(BaseModel):
     IdOsobe_Zaposlenik: int | None = None
 
 
+class ReservationCustomerUpdate(BaseModel):
+    IdTermina: int
+    IdVozila: int
+    KilometrazaVozila: int
+    OpisProblema: str
+
+
+class ReservationServiceAdd(BaseModel):
+    IdUsluge: int
+    Kolicina: int = 1
+
+
+class ReservationServiceQuantityUpdate(BaseModel):
+    Kolicina: int
+
+
 class ReservationResponse(BaseModel):
     IdRezervacije: int = Field(validation_alias="IdRezervacije")
     DatumKreiranja: date

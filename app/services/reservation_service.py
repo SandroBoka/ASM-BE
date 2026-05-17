@@ -108,6 +108,194 @@ class ReservationService:
         self.repository.db.refresh(created)
         return created
 
+    def update_reservation_header(
+            self,
+            reservation_id: int,
+            id_osobe_korisnik: int,
+            id_termina: int,
+            id_vozila: int,
+            kilometraza_vozila: int,
+            opis_problema: str,
+    ) -> Reservation:
+        reservation = self._get_editable_reservation(reservation_id, id_osobe_korisnik)
+
+        if kilometraza_vozila < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Kilometraža vozila ne smije biti negativna.",
+            )
+        if not opis_problema or not opis_problema.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Opis problema je obavezno polje.",
+            )
+
+        vehicle = self.vehicle_service.get_vehicle_by_id(id_vozila)
+        if vehicle.IdOsobe != id_osobe_korisnik:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Odabrano vozilo ne pripada korisniku.",
+            )
+
+        if id_termina != reservation.IdTermina:
+            appointment = self.appointment_service.get_appointment_by_id(id_termina)
+            if appointment.Status != AppointmentStatus.SLOBODAN:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Odabrani termin nije slobodan.",
+                )
+
+        reservation.IdTermina = id_termina
+        reservation.IdVozila = id_vozila
+        reservation.KilometrazaVozila = kilometraza_vozila
+        reservation.OpisProblema = opis_problema.strip()
+        return self.repository.update(reservation)
+
+    def add_service_to_reservation(
+            self,
+            reservation_id: int,
+            id_osobe_korisnik: int,
+            id_usluge: int,
+            kolicina: int,
+    ) -> ReservationServiceLink:
+        reservation = self._get_editable_reservation(reservation_id, id_osobe_korisnik)
+
+        if kolicina < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Količina mora biti najmanje 1.",
+            )
+
+        self.service_catalog_service.get_service_by_id(id_usluge)
+
+        if self.repository.get_service_link(reservation_id, id_usluge) is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ova usluga je već dodana u rezervaciju. Uredi količinu umjesto dodavanja.",
+            )
+
+        self._check_slot_capacity(
+            reservation,
+            extra_service_id=id_usluge,
+            extra_kolicina=kolicina,
+        )
+
+        link = ReservationServiceLink(
+            IdRezervacije=reservation_id,
+            IdUsluge=id_usluge,
+            Kolicina=kolicina,
+        )
+        return self.repository.add_service(link)
+
+    def update_service_quantity(
+            self,
+            reservation_id: int,
+            id_osobe_korisnik: int,
+            id_usluge: int,
+            kolicina: int,
+    ) -> ReservationServiceLink:
+        reservation = self._get_editable_reservation(reservation_id, id_osobe_korisnik)
+
+        if kolicina < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Količina mora biti najmanje 1.",
+            )
+
+        link = self.repository.get_service_link(reservation_id, id_usluge)
+        if link is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usluga nije pronađena u rezervaciji.",
+            )
+
+        self._check_slot_capacity(
+            reservation,
+            replace_service_id=id_usluge,
+            replace_kolicina=kolicina,
+        )
+
+        link.Kolicina = kolicina
+        return self.repository.update_service_link(link)
+
+    def remove_service_from_reservation(
+            self,
+            reservation_id: int,
+            id_osobe_korisnik: int,
+            id_usluge: int,
+    ) -> None:
+        reservation = self._get_editable_reservation(reservation_id, id_osobe_korisnik)
+
+        link = self.repository.get_service_link(reservation_id, id_usluge)
+        if link is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usluga nije pronađena u rezervaciji.",
+            )
+
+        if len(reservation.reservation_services) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Rezervacija mora sadržavati barem jednu uslugu.",
+            )
+
+        self.repository.delete_service_link(link)
+
+    def _get_editable_reservation(
+            self,
+            reservation_id: int,
+            id_osobe_korisnik: int,
+    ) -> Reservation:
+        reservation = self.get_reservation_by_id(reservation_id)
+
+        if reservation.IdOsobe_Korisnik != id_osobe_korisnik:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Možete uređivati samo vlastite rezervacije.",
+            )
+
+        if reservation.Status != ReservationStatus.NA_CEKANJU:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Uređivanje je moguće samo dok je rezervacija u statusu 'na cekanju'.",
+            )
+
+        return reservation
+
+    def _check_slot_capacity(
+            self,
+            reservation: Reservation,
+            extra_service_id: int | None = None,
+            extra_kolicina: int = 0,
+            replace_service_id: int | None = None,
+            replace_kolicina: int = 0,
+    ) -> None:
+        appointment = self.appointment_service.get_appointment_by_id(reservation.IdTermina)
+        slot_minutes = (
+            appointment.VrijemeDo.hour * 60 + appointment.VrijemeDo.minute
+        ) - (appointment.VrijemeOd.hour * 60 + appointment.VrijemeOd.minute)
+
+        total = 0
+        for link in reservation.reservation_services:
+            service = self.service_catalog_service.get_service_by_id(link.IdUsluge)
+            kolicina = link.Kolicina
+            if replace_service_id is not None and link.IdUsluge == replace_service_id:
+                kolicina = replace_kolicina
+            total += service.Trajanje * kolicina
+
+        if extra_service_id is not None:
+            service = self.service_catalog_service.get_service_by_id(extra_service_id)
+            total += service.Trajanje * extra_kolicina
+
+        if total > slot_minutes:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Ukupno trajanje usluga ({total} min) ne stane u termin "
+                    f"({slot_minutes} min)."
+                ),
+            )
+
     def approve_reservation(
             self,
             reservation_id: int,
