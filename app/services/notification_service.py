@@ -7,6 +7,9 @@ from app.repositories.notification_repository import NotificationRepository
 from app.services.email_service import EmailService
 
 
+SIGNATURE = "— ASM Servis"
+
+
 class NotificationService:
     def __init__(
             self,
@@ -29,6 +32,11 @@ class NotificationService:
     def notify_reservation_rejected(self, reservation: Reservation) -> Notification:
         naslov = "Rezervacija odbijena"
         tekst = self._format_rejected_text(reservation)
+        return self._send_and_save(reservation, naslov, tekst)
+
+    def notify_reservation_canceled(self, reservation: Reservation) -> Notification:
+        naslov = "Rezervacija otkazana"
+        tekst = self._format_canceled_text(reservation)
         return self._send_and_save(reservation, naslov, tekst)
 
     def notify_change_requested(self, change: AppointmentChange) -> Notification:
@@ -92,7 +100,7 @@ class NotificationService:
         self.email_service.send(
             recipient=recipient_email,
             subject=naslov,
-            body=tekst,
+            body=f"{tekst}\n\n{SIGNATURE}",
         )
 
         return saved
@@ -135,6 +143,21 @@ class NotificationService:
         if reservation.KomentarZaposlenika:
             lines.append("")
             lines.append(f"Komentar zaposlenika: {reservation.KomentarZaposlenika}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_canceled_text(reservation: Reservation) -> str:
+        datum = reservation.appointment.Datum.strftime("%d.%m.%Y.")
+        vrijeme = reservation.appointment.VrijemeOd.strftime("%H:%M")
+
+        lines = [
+            f"Vaša rezervacija za {datum} u {vrijeme} je otkazana.",
+        ]
+
+        if reservation.KomentarZaposlenika:
+            lines.append("")
+            lines.append(f"Komentar: {reservation.KomentarZaposlenika}")
 
         return "\n".join(lines)
 

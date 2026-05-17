@@ -176,15 +176,20 @@ def cancel_reservation(
         reservation_id: int,
         request: ReservationActionRequest,
         service: ReservationService = Depends(get_reservation_service),
+        notification_service: NotificationService = Depends(get_notification_service),
         current_user: AuthUserResponse = Depends(get_current_user),
 ):
     reservation = service.get_reservation_by_id(reservation_id)
     ensure_admin_or_self(current_user, reservation.IdOsobe_Korisnik)
 
-    return service.cancel_reservation(
+    canceled = service.cancel_reservation(
         reservation_id=reservation_id,
         komentar=request.komentar,
     )
+
+    notification_service.notify_reservation_canceled(canceled)
+
+    return canceled
 
 
 @router.post("/{reservation_id}/complete", response_model=ReservationResponse)

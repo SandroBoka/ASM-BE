@@ -117,7 +117,8 @@ def test_notify_reservation_created():
     call = email_service.calls[0]
     assert call["recipient"] == "korisnik@example.com"
     assert call["subject"] == "Rezervacija zaprimljena"
-    assert call["body"] == notification.Tekst
+    assert call["body"].startswith(notification.Tekst)
+    assert call["body"].rstrip().endswith("— ASM Servis")
 
 
 def test_notify_reservation_approved_with_comment():
@@ -153,6 +154,31 @@ def test_notify_reservation_rejected_with_comment():
     assert "01.05.2026." in notification.Tekst
     assert "09:00" in notification.Tekst
     assert "Komentar zaposlenika: Nemamo termina" in notification.Tekst
+
+
+def test_notify_reservation_canceled():
+    service, _, email_service = _make_service()
+    reservation = _make_reservation()
+
+    notification = service.notify_reservation_canceled(reservation)
+
+    assert notification.Naslov == "Rezervacija otkazana"
+    assert notification.IdOsobe == 100
+    assert notification.IdRezervacije == 1
+    assert "01.05.2026." in notification.Tekst
+    assert "09:00" in notification.Tekst
+    assert "otkazana" in notification.Tekst.lower()
+    assert email_service.calls[0]["subject"] == "Rezervacija otkazana"
+
+
+def test_signature_is_appended_only_to_email_not_to_notification():
+    service, _, email_service = _make_service()
+    reservation = _make_reservation()
+
+    notification = service.notify_reservation_created(reservation)
+
+    assert "— ASM Servis" not in notification.Tekst
+    assert email_service.calls[0]["body"].rstrip().endswith("— ASM Servis")
 
 
 def test_notify_change_requested():
