@@ -68,6 +68,25 @@ Generate a stronger local development secret with:
 python3 -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
+### SMTP (E-mail notifications)
+
+The `NotificationService` sends real e-mails through Gmail SMTP when reservations or appointment-change requests are processed. Add the following to `.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=asm.servis.demo@gmail.com
+SMTP_PASSWORD=<internally shared>
+```
+
+`SMTP_HOST` and `SMTP_PORT` have defaults in `app/core/config.py` and may be omitted. `SMTP_USER` and `SMTP_PASSWORD` are required.
+
+`SMTP_PASSWORD` is a 16-character Gmail **App Password**, not the regular account password. The demo project shares a dedicated account (`asm.servis.demo@gmail.com`); the App Password is shared with the team out-of-band (not committed). To use a different Gmail account:
+
+1. Enable 2-Step Verification on the account: <https://myaccount.google.com/security>
+2. Generate an App Password: <https://myaccount.google.com/apppasswords>
+3. Paste the 16-character value into `SMTP_PASSWORD` (spaces are optional).
+
 ## Running the Database Stack
 
 The project includes a Docker Compose setup for PostgreSQL and Adminer.

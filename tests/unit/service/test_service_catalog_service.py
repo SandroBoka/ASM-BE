@@ -26,6 +26,12 @@ class FakeServiceRepository:
 
         return None
 
+    def get_by_name_case_insensitive(self, name):
+        for service in self.services:
+            if service.NazivUsluge.strip().lower() == name.strip().lower():
+                return service
+        return None
+
     def create(self, service):
         service.IdUsluge = self.next_id
         self.next_id += 1
@@ -131,6 +137,82 @@ def test_get_service_by_id_fails_when_service_does_not_exist():
 
     assert error.value.status_code == 404
     assert error.value.detail == "Usluga nije pronađena."
+
+
+def test_create_service_fails_when_name_already_exists_case_insensitive():
+    repository = FakeServiceRepository()
+    service_catalog = ServiceCatalogService(repository)
+
+    service_catalog.create_service(
+        naziv_usluge="Redovni servis",
+        opis=None,
+        trajanje=60,
+        cijena=150,
+    )
+
+    with pytest.raises(HTTPException) as error:
+        service_catalog.create_service(
+            naziv_usluge="redovni SERVIS",
+            opis=None,
+            trajanje=45,
+            cijena=120,
+        )
+
+    assert error.value.status_code == 409
+    assert "već postoji" in error.value.detail
+
+
+def test_update_service_can_keep_its_own_name():
+    repository = FakeServiceRepository()
+    service_catalog = ServiceCatalogService(repository)
+
+    created = service_catalog.create_service(
+        naziv_usluge="Dijagnostika",
+        opis=None,
+        trajanje=30,
+        cijena=50,
+    )
+
+    updated = service_catalog.update_service(
+        service_id=created.IdUsluge,
+        naziv_usluge="Dijagnostika",
+        opis="Dopunjeni opis",
+        trajanje=45,
+        cijena=70,
+    )
+
+    assert updated.IdUsluge == created.IdUsluge
+    assert updated.Opis == "Dopunjeni opis"
+    assert updated.Trajanje == 45
+
+
+def test_update_service_fails_when_name_collides_with_another_service():
+    repository = FakeServiceRepository()
+    service_catalog = ServiceCatalogService(repository)
+
+    service_catalog.create_service(
+        naziv_usluge="Redovni servis",
+        opis=None,
+        trajanje=60,
+        cijena=150,
+    )
+    second = service_catalog.create_service(
+        naziv_usluge="Dijagnostika",
+        opis=None,
+        trajanje=30,
+        cijena=50,
+    )
+
+    with pytest.raises(HTTPException) as error:
+        service_catalog.update_service(
+            service_id=second.IdUsluge,
+            naziv_usluge="redovni servis",
+            opis=None,
+            trajanje=30,
+            cijena=50,
+        )
+
+    assert error.value.status_code == 409
 
 
 def test_search_services_by_name():

@@ -23,6 +23,14 @@ class ServiceRepository:
             .first()
         )
 
+    def get_by_name_case_insensitive(self, name: str) -> Service | None:
+        return (
+            self.db
+            .query(Service)
+            .filter(Service.NazivUsluge.ilike(name.strip()))
+            .first()
+        )
+
     def create(self, service: Service) -> Service:
         self.db.add(service)
         self.db.commit()

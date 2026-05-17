@@ -74,6 +74,37 @@ class ReservationRepository:
         self.db.refresh(reservation_service)
         return reservation_service
 
+    def delete_services(self, reservation_id: int) -> None:
+        (
+            self.db
+            .query(ReservationService)
+            .filter(ReservationService.IdRezervacije == reservation_id)  # type: ignore[arg-type]
+            .delete(synchronize_session=False)
+        )
+        self.db.commit()
+
+    def get_service_link(
+            self,
+            reservation_id: int,
+            id_usluge: int,
+    ) -> ReservationService | None:
+        return (
+            self.db
+            .query(ReservationService)
+            .filter(ReservationService.IdRezervacije == reservation_id)  # type: ignore[arg-type]
+            .filter(ReservationService.IdUsluge == id_usluge)  # type: ignore[arg-type]
+            .first()
+        )
+
+    def update_service_link(self, link: ReservationService) -> ReservationService:
+        self.db.commit()
+        self.db.refresh(link)
+        return link
+
+    def delete_service_link(self, link: ReservationService) -> None:
+        self.db.delete(link)
+        self.db.commit()
+
     def update(self, reservation: Reservation) -> Reservation:
         self.db.commit()
         self.db.refresh(reservation)

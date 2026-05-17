@@ -2,10 +2,19 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.service_schema import ServiceResponse
+
 
 class ReservationServiceItemCreate(BaseModel):
     IdUsluge: int
     Kolicina: int = 1
+
+
+class ReservationServiceItemResponse(BaseModel):
+    Kolicina: int
+    service: ServiceResponse
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReservationCreate(BaseModel):
@@ -23,6 +32,10 @@ class ReservationProcess(BaseModel):
     IdOsobe_Zaposlenik: int
 
 
+class ReservationActionRequest(BaseModel):
+    komentar: str | None = None
+
+
 class ReservationUpdate(BaseModel):
     Status: str | None = None
     KilometrazaVozila: int | None = None
@@ -31,6 +44,22 @@ class ReservationUpdate(BaseModel):
     IdTermina: int | None = None
     IdVozila: int | None = None
     IdOsobe_Zaposlenik: int | None = None
+
+
+class ReservationCustomerUpdate(BaseModel):
+    IdTermina: int
+    IdVozila: int
+    KilometrazaVozila: int
+    OpisProblema: str
+
+
+class ReservationServiceAdd(BaseModel):
+    IdUsluge: int
+    Kolicina: int = 1
+
+
+class ReservationServiceQuantityUpdate(BaseModel):
+    Kolicina: int
 
 
 class ReservationResponse(BaseModel):
@@ -44,5 +73,9 @@ class ReservationResponse(BaseModel):
     IdTermina: int
     IdVozila: int
     IdOsobe_Zaposlenik: int | None = None
+    services: list[ReservationServiceItemResponse] = Field(
+        default_factory=list,
+        validation_alias="reservation_services",
+    )
 
     model_config = ConfigDict(from_attributes=True)
