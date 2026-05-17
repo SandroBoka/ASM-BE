@@ -78,6 +78,7 @@ def create_change_request(
         request: AppointmentChangeRequest,
         service: AppointmentChangeService = Depends(get_appointment_change_service),
         reservation_repository: ReservationRepository = Depends(get_reservation_repository),
+        notification_service: NotificationService = Depends(get_notification_service),
         current_user: AuthUserResponse = Depends(get_current_user),
 ):
     reservation = reservation_repository.get_by_id(request.IdRezervacije)
@@ -88,10 +89,14 @@ def create_change_request(
         )
     ensure_admin_or_self(current_user, reservation.IdOsobe_Korisnik)
 
-    return service.create_change_request(
+    change = service.create_change_request(
         id_rezervacije=request.IdRezervacije,
         id_novog_termina=request.IdNovogTermina,
     )
+
+    notification_service.notify_change_requested(change)
+
+    return change
 
 
 @router.get("/pending", response_model=list[AppointmentChangeResponse])
