@@ -177,7 +177,7 @@ The migrations create the service catalog table and the current core ASM schema:
 - `rezervacija_usluga`: reservation-service join table
 - `obavijest`: customer notifications
 
-The auth, service catalog, person/customer/employee, and vehicle API modules are currently exposed through HTTP routes. Core appointment, reservation, appointment-change, and notification tables exist in the schema, while their full route/service flows are still pending.
+The HTTP API exposes flows for authentication, the service catalog, persons/customers/employees, vehicles, appointments, reservations, appointment-change requests, and customer notifications.
 
 ## Running the Application
 
@@ -215,7 +215,7 @@ Public routes:
 - `POST /auth/logout`
 - `POST /persons/customers`
 
-`/auth/refresh` and `/auth/logout` do not require an access token because they operate on the refresh token in the request body. All service routes, vehicle routes, `/auth/me`, and all person routes except customer registration require an access token.
+`/auth/refresh` and `/auth/logout` do not require an access token because they operate on the refresh token in the request body. All other application routes require an access token, except `POST /persons/customers`, which is public customer registration.
 
 The API currently distinguishes authenticated users by:
 
@@ -362,6 +362,162 @@ All vehicle routes require an access token. Access is guarded by vehicle ownersh
 
 Deleting a customer also deletes that customer's vehicles through ORM cascade behavior and database foreign-key cascade rules.
 
+### Appointments
+
+- `GET /appointments/free`
+- `GET /appointments/free?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
+- `GET /appointments`
+- `GET /appointments/{appointment_id}`
+- `POST /appointments`
+- `PUT /appointments/{appointment_id}`
+- `DELETE /appointments/{appointment_id}`
+
+Appointment request fields:
+
+- `Datum`: appointment date
+- `VrijemeOd`: start time
+- `VrijemeDo`: end time, must be after `VrijemeOd`
+- `Status`: accepted values are `slobodan`, `zauzet`, and `otkazan`; defaults to `slobodan`
+
+Access rules:
+
+- any authenticated user can view a single appointment and list free appointments
+- employees can list all appointments
+- only admins and workshop leads (`voditelj`) can create, update, or delete appointments
+- occupied appointments, or appointments already linked to reservations or appointment-change requests, cannot be deleted
+
+### Reservations
+
+- `GET /reservations`
+- `GET /reservations/pending`
+- `GET /reservations/customer/{customer_id}`
+- `GET /reservations/{reservation_id}`
+- `POST /reservations`
+- `PUT /reservations/{reservation_id}`
+- `POST /reservations/{reservation_id}/services`
+- `PUT /reservations/{reservation_id}/services/{service_id}`
+- `DELETE /reservations/{reservation_id}/services/{service_id}`
+- `POST /reservations/{reservation_id}/approve`
+- `POST /reservations/{reservation_id}/reject`
+- `POST /reservations/{reservation_id}/cancel`
+- `POST /reservations/{reservation_id}/complete`
+
+Reservation creation request:
+
+```json
+{
+  "IdOsobe_Korisnik": 1,
+  "IdTermina": 1,
+  "IdVozila": 1,
+  "KilometrazaVozila": 50000,
+  "OpisProblema": "Cudan zvuk pri paljenju",
+  "services": [
+    {
+      "IdUsluge": 1,
+      "Kolicina": 1
+    }
+  ]
+}
+```
+
+Reservation rules:
+
+- `KilometrazaVozila` cannot be negative
+- `OpisProblema` is required
+- each reservation must contain at least one service
+- service quantity must be at least 1
+- the selected vehicle must belong to the customer
+- the selected appointment must be free
+- the total service duration must fit into the selected appointment slot when editing reservation services
+
+Reservation statuses are:
+
+- `na cekanju`
+- `odobrena`
+- `odbijena`
+- `otkazana`
+- `zavrsena`
+
+Allowed status transitions:
+
+- `na cekanju` -> `odobrena`, `odbijena`, `otkazana`
+- `odobrena` -> `otkazana`, `zavrsena`
+
+Access rules:
+
+- customers can create and edit their own pending reservations
+- employees can list all reservations and all pending reservations
+- employees can view reservations for any customer
+- customers can view only their own reservations
+- approving and rejecting reservations requires an employee account
+- canceling is allowed for the owning customer or an admin
+- completing a reservation requires an employee account
+
+Reservation actions send customer notifications by e-mail and persist them in `obavijest`.
+
+### Appointment Changes
+
+- `GET /appointment-changes`
+- `GET /appointment-changes/pending`
+- `GET /appointment-changes/reservation/{reservation_id}`
+- `GET /appointment-changes/{change_id}`
+- `POST /appointment-changes`
+- `POST /appointment-changes/{change_id}/accept`
+- `POST /appointment-changes/{change_id}/reject`
+
+Appointment-change request:
+
+```json
+{
+  "IdRezervacije": 1,
+  "IdNovogTermina": 2
+}
+```
+
+Accept/reject request:
+
+```json
+{
+  "komentar": "Termin je potvrden"
+}
+```
+
+Appointment-change rules:
+
+- changes can be requested only for approved reservations
+- the new appointment must be different from the current appointment
+- the new appointment must be free
+- accepting a change frees the old appointment, occupies the new appointment, and moves the reservation to the new appointment
+- rejecting a change leaves the reservation and appointments unchanged
+
+Appointment-change statuses are:
+
+- `na cekanju`
+- `prihvacen`
+- `odbijen`
+
+Access rules:
+
+- customers can request changes only for their own reservations
+- employees can list and process pending change requests
+- customers can view change requests for their own reservations
+- employees can view change requests for any reservation
+
+### Notifications
+
+- `GET /notifications`
+- `GET /notifications/unread`
+- `POST /notifications/{notification_id}/read`
+
+Notifications are created when reservations and appointment-change requests are created, approved, rejected, or canceled. They are stored in the database and also sent through the configured e-mail service.
+
+Access rules:
+
+- notification routes are customer-only
+- customers can list their own notifications
+- customers can list only their unread notifications
+- customers can mark only their own notifications as read
+
 ## Module Overview
 
 ### `app/`
@@ -371,7 +527,7 @@ Deleting a customer also deletes that customer's vehicles through ORM cascade be
 ### `app/api/routes/`
 
 - contains FastAPI route definitions
-- groups HTTP endpoints by feature, such as health checks, database checks, authentication, service catalog operations, person operations, and vehicle operations
+- groups HTTP endpoints by feature, such as health checks, database checks, authentication, service catalog operations, person operations, vehicle operations, appointment scheduling, reservations, appointment-change requests, and notifications
 
 ### `app/api/dependencies/`
 
@@ -416,7 +572,8 @@ Deleting a customer also deletes that customer's vehicles through ORM cascade be
 ### `tests/`
 
 - contains unit tests for route behavior, repository persistence, and service-layer validation
-- contains integration tests for auth, service, person, and vehicle API flows
+- contains unit test coverage for auth, services, persons, vehicles, appointments, reservations, appointment changes, and notifications
+- contains integration tests for auth, service, person, vehicle, and reservation API flows
 
 ### `docker-compose.yml`
 
@@ -439,6 +596,8 @@ CREATE DATABASE asm_test_db;
 ```
 
 The database-backed tests call `drop_all` and `create_all` on the test database. Do not run multiple pytest processes in parallel against the same `asm_test_db`, because concurrent table drops and creates can race each other.
+
+Some route tests override the notification e-mail dependency with a fake mail service so the test suite does not send real SMTP messages.
 
 ## Common Commands
 
